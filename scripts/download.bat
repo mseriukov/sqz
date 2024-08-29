@@ -5,21 +5,21 @@ if not exist ..\test (
 pushd ..\test
 :: Copyrighted *) "The Hitch Hiker's Guide to the Galaxy" by Douglas Adams
 if not exist "hhgttg.txt" ( :: modern prose text file
-    curl -LJO https://github.com/jraleman/42_get_next_line/blob/master/tests/hhgttg.txt
+    curl -LJO https://raw.githubusercontent.com/jraleman/42_get_next_line/master/tests/hhgttg.txt
 )
 if not exist "sqlite3.c" ( :: public domain amalgamated C source code
     curl -LJO https://raw.githubusercontent.com/jmscreation/libsqlite3/main/src/sqlite3.c
 )
 if not exist "mandrill.png" ( :: mandrill image USC SIPI Image Database
-    curl -LJO https://commons.wikimedia.org/wiki/File:Wikipedia-sipi-image-db-mandrill-4.2.03.png
-    rename File_Wikipedia-sipi-image-db-mandrill-4.2.03.png mandrill.png
+    curl -LJO https://upload.wikimedia.org/wikipedia/commons/c/c1/Wikipedia-sipi-image-db-mandrill-4.2.03.png
+    rename Wikipedia-sipi-image-db-mandrill-4.2.03.png mandrill.png
 )
 if not exist "arm64.elf" ( :: arm64 executable sample
-    curl -LJO https://github.com/JonathanSalwan/binary-samples/blob/master/elf-Linux-ARM64-bash
+    curl -LJO https://github.com/JonathanSalwan/binary-samples/raw/master/elf-Linux-ARM64-bash
     rename elf-Linux-ARM64-bash arm64.elf
 )
 if not exist "x64.elf" ( :: x64 executable sample
-    curl -LJO https://github.com/JonathanSalwan/binary-samples/blob/master/elf-Linux-x64-bash
+    curl -LJO https://github.com/JonathanSalwan/binary-samples/raw/master/elf-Linux-x64-bash
     rename elf-Linux-x64-bash x64.elf
 )
 :: Gutenberg text files:
