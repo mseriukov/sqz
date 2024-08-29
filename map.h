@@ -3,7 +3,11 @@
 
 #include <stdint.h>
 
-typedef uint8_t map_entry_t[256]; // data[0] number of bytes [2..255]
+// Braindead hash map for lz77 compression dictionary
+// Only supports d from 2 to 255 b because
+// 255 to ~2 b compression is about 1% of source and is good enough.
+
+typedef uint8_t map_entry_t[256]; // d[0] number of b [2..127]
 
 typedef struct {
     map_entry_t* entry;
@@ -14,11 +18,18 @@ typedef struct {
 } map_t;
 
 typedef struct {
-    void (*init)(map_t* m, map_entry_t entry[], int32_t n);
-    const void* (*get)(const map_t* m, const void* data, uint8_t bytes);
-    void (*put)(map_t* m, const void* data, uint8_t bytes);
-    void (*clear)(map_t *m);
+    void          (*init)(map_t* m, map_entry_t entry[], int32_t n);
+    const void*   (*data)(const map_t* m, int32_t i);
+    const int32_t (*bytes)(const void* data); // b(null) returns 0
+    const int32_t (*get)(const map_t* m, const void* data, uint8_t bytes);
+    void          (*put)(map_t* m, const void* data, uint8_t bytes);
+    const int32_t (*best)(const map_t* m, const void* data, size_t bytes);
+    void          (*clear)(map_t *m);
 } map_if;
+
+// map.put()  is no operation if map is filled to 75% or more
+// map.get()  returns index of matching entry or -1
+// map.best() returns index of longest matching entry or -1
 
 extern map_if map;
 
@@ -29,27 +40,40 @@ extern map_if map;
 #define map_implemented
 
 #include <string.h>
-#ifndef swear
+
+#ifndef assert
 #include <assert.h>
-#define swear(...) assert(__VA_ARGS__)
 #endif
+
 #ifndef null
 #define null ((void*)0)
 #endif
 
-static uint64_t map_hash64(const uint8_t* data, int64_t bytes) {
-    uint64_t hash  = 0xcbf29ce484222325; // FNV_offset_basis for 64-bit
-    uint64_t prime = 0x100000001b3;      // FNV_prime for 64-bit
-    swear(bytes > 0);
-    for (int64_t i = 0; i < bytes; i++) {
-        hash ^= (uint64_t)data[i];
-        hash *= prime;
+// FNV Fowler–Noll–Vo hash function
+// https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function
+
+// FNV offset basis for 64-bit:
+static const uint64_t map_hash_init = 0xCBF29CE484222325;
+
+// FNV prime for 64-bit
+static const uint64_t map_prime64   = 0x100000001B3;
+
+static inline uint64_t map_hash64_byte(uint64_t hash, const uint8_t byte) {
+    return (hash ^ (uint64_t)byte) * map_prime64;
+}
+
+static inline uint64_t map_hash64(const uint8_t* data, size_t bytes) {
+    enum { max_bytes = sizeof(((map_t*)(null))->entry[0]) - 1 };
+    assert(2 <= bytes && bytes <= max_bytes);
+    uint64_t hash = map_hash_init;
+    for (size_t i = 0; i < bytes; i++) {
+        hash = map_hash64_byte(hash, data[i]);
     }
     return hash;
 }
 
 static void map_init(map_t* m, map_entry_t entry[], int32_t n) {
-    swear(16 < n && n < 1024 * 1024);
+    assert(16 < n && n < 1024 * 1024);
     m->n = n;
     m->entry = entry;
     for (int32_t i = 0; i < m->n; i++) { m->entry[i][0] = 0; }
@@ -58,37 +82,74 @@ static void map_init(map_t* m, map_entry_t entry[], int32_t n) {
     m->max_bytes = 0;
 }
 
-static const uint8_t* map_get(const map_t* m, const uint8_t* data, uint8_t bytes) {
-    uint64_t hash = map_hash64(data, bytes);
-    size_t i = (size_t)hash % m->n;
-    while (m->entry[i][0] > 0) {
-        if (m->entry[i][0] == bytes && memcmp(&m->entry[i][1], data, bytes) == 0) {
-            return &m->entry[i][1];
-        }
-        i = (i + 1) % m->n;
-    }
-    return null;
+const inline void* map_data(const map_t* m, int32_t i) {
+    assert(0 <= i && i < m->n);
+    return m->entry[i][0] > 0 ? &m->entry[i][1] : null;
 }
 
-static void map_put(map_t* m, const uint8_t* data, uint8_t bytes) {
-    swear(2 <= bytes && bytes < sizeof(m->entry[0]));
-    swear(m->entries < m->n * 3 / 4);
-    uint64_t hash = map_hash64(data, bytes);
+const inline int32_t map_bytes(const void* data) {
+    return data == null ? 0 : *(((uint8_t*)data) - 1);
+}
+
+static const int32_t map_get(const map_t* m, const void* d, uint8_t b) {
+    enum { max_bytes = sizeof(m->entry[0]) - 1 };
+    assert(2 <= b && b <= max_bytes);
+    const map_entry_t* entries = m->entry;
+    uint64_t hash = map_hash64(d, b);
     size_t i = (size_t)hash % m->n;
-    int32_t rehash = 0;
-    while (m->entry[i][0] > 0) {
-        if (m->entry[i][0] == bytes &&
-            memcmp(&m->entry[i][1], data, bytes) == 0) {
-            return; // already exists
+    // Because map is filled to 3/4 only there will always be
+    // an empty slot at the end of the chain.
+    while (entries[i][0] > 0) {
+        if (entries[i][0] == b && memcmp(entries[i] + 1, d, b) == 0) {
+            return (int32_t)i;
         }
-        rehash++;
         i = (i + 1) % m->n;
     }
-    if (rehash > m->max_chain) { m->max_chain = rehash; }
-    if (bytes  > m->max_bytes) { m->max_bytes = bytes; }
-    m->entry[i][0] = bytes;
-    memcpy(&m->entry[i][1], data, bytes);
-    m->entries++;
+    return -1;
+}
+
+static void map_put(map_t* m, const uint8_t* d, uint8_t b) {
+    enum { max_bytes = sizeof(m->entry[0]) - 1 };
+    assert(2 <= b && b <= max_bytes);
+    if (m->entries < m->n * 3 / 4) {
+        map_entry_t* entries = m->entry;
+        uint64_t hash = map_hash64(d, b);
+        size_t i = (size_t)hash % m->n;
+        int32_t chain = 0; // max chain length
+        while (entries[i][0] > 0) {
+            if (entries[i][0] == b && memcmp(entries[i] + 1, d, b) == 0) {
+                return; // found match with existing entry
+            }
+            chain++;
+            i = (i + 1) % m->n;
+            assert(chain < m->n); // looping endlessly?
+        }
+        if (chain > m->max_chain) { m->max_chain = chain; }
+        if (b  > m->max_bytes) { m->max_bytes = b; }
+        entries[i][0] = b;
+        memcpy(entries[i] + 1, d, b);
+        m->entries++;
+    }
+}
+
+const int32_t map_best(const map_t* m, const void* data, size_t bytes) {
+    enum { max_bytes = sizeof(m->entry[0]) - 1 };
+    int32_t best = -1; // best (longest) result
+    if (bytes > 1) {
+        const uint8_t  b = (uint8_t)(bytes <= max_bytes ? bytes : max_bytes);
+        const uint8_t* d = (uint8_t*)data;
+        uint64_t hash = map_hash64_byte(map_hash_init, d[0]);
+        for (uint8_t i = 1; i < b; i++) {
+            hash = map_hash64_byte(hash, d[i]);
+            int32_t r = map_get(m, data, i);
+            if (r != -1) {
+                best = r;
+            } else if (best != -1) {
+                break; // will return longest matching entry index
+            }
+        }
+    }
+    return best;
 }
 
 static void map_clear(map_t *m) {
@@ -97,12 +158,15 @@ static void map_clear(map_t *m) {
     }
     m->entries = 0;
     m->max_chain = 0;
+    m->max_bytes = 0;
 }
 
 map_if map = {
     .init  = map_init,
     .get   = map_get,
     .put   = map_put,
+    .bytes = map_bytes,
+    .best  = map_best,
     .clear = map_clear
 };
 

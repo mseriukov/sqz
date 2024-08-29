@@ -35,6 +35,7 @@
   <ItemGroup>
     <None Include="../scripts/download.bat" />
     <None Include="../README.md" />
+    <None Include="..\.gitignore" />
     <None Include="..\test\arm64.elf" />
     <None Include="..\test\x64.elf" />
   </ItemGroup>

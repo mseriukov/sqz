@@ -1,22 +1,11 @@
-#ifdef _MSC_VER // "/Wall" is very useful but yet a bit overreaching:
-#pragma warning(disable: 4820) // 'bytes' padding added after construct 'name'
-#pragma warning(disable: 5045) // Spectre mitigation for memory load
-#pragma warning(disable: 4710) // function not inlined
-#pragma warning(disable: 4711) // function selected for automatic inline expansion
-#endif
-
-#define NEED_WIN32_API
-
-#if defined(_MSC_VER) && defined(NEED_WIN32_API)
-#define STRICT // as opposite is easy, gentle or sloppy?
-#define WIN32_LEAN_AND_MEAN // exclude stuff which no one needs/wants
-#define VC_EXTRALEAN        // exclude even more stuff
-#include <Windows.h>
-#endif
-
-#include "lz77.h"
-#include "map.h"
 #include "rt.h"
+
+#define assert(b, ...) rt_assert(b, __VA_ARGS__)
+#define printf(...)    rt_printf(__VA_ARGS__)
+#define println(...)   rt_println(__VA_ARGS__)
+
+#include "map.h"
+#include "lz77.h"
 
 enum { lzn_window_bits = 11 };
 

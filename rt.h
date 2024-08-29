@@ -17,6 +17,10 @@
 
 #ifdef _WIN32
 #include <direct.h> // chdir
+#define STRICT // as opposite is easy, gentle or sloppy?
+#define WIN32_LEAN_AND_MEAN // exclude stuff which no one needs/wants
+#define VC_EXTRALEAN        // exclude even more stuff
+#include <Windows.h>
 #else
 #include <unistd.h>
 #include <dirent.h>
@@ -28,6 +32,10 @@
 #pragma warning(disable: 4820) // '...' bytes padding added after data member '...'
 #pragma warning(disable: 4996) // The POSIX name for this item is deprecated.
 #pragma warning(disable: 5045) // Compiler will insert Spectre mitigation
+#endif
+
+#if defined(_DEBUG) && !defined(DEBUG)
+#define DEBUG // clang & gcc make use DEBUG, Microsoft _DEBUG
 #endif
 
 #define null ((void*)0) // like null_ptr better than NULL (0)
