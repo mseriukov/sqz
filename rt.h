@@ -1,4 +1,3 @@
-#pragma once
 #ifndef rt_header_included
 #define rt_header_included
 
@@ -16,12 +15,11 @@
 #include <sys/stat.h>
 
 #ifdef _WIN32
-#include <direct.h> // chdir
-#define STRICT // as opposite is easy, gentle or sloppy?
-#define WIN32_LEAN_AND_MEAN // exclude stuff which no one needs/wants
-#define VC_EXTRALEAN        // exclude even more stuff
+#define STRICT
+#define WIN32_LEAN_AND_MEAN
+#define VC_EXTRALEAN
 #include <Windows.h>
-#else
+#else // any posix platform
 #include <unistd.h>
 #include <dirent.h>
 #endif

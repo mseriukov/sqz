@@ -1,4 +1,3 @@
-#pragma once
 #ifndef huffman_header_included
 #define huffman_header_included
 
@@ -15,10 +14,10 @@ typedef struct {
     int32_t  pix;  // parent
     int32_t  lix;  // left
     int32_t  rix;  // right
-} huffman_node_t;
+} huffman_node_type;
 
 typedef struct {
-    huffman_node_t* node;
+    huffman_node_type* node;
     int32_t n;
     int32_t depth; // max tree depth seen
     int32_t complete; // tree is too deep or freq too high - no more updates
@@ -29,11 +28,12 @@ typedef struct {
         size_t swaps;
         size_t moves;
     } stats;
-} huffman_tree_t;
+} huffman_tree_type;
 
 typedef struct {
-    void (*init)(huffman_tree_t* t, huffman_node_t nodes[], const int32_t m);
-    void (*inc_frequency)(huffman_tree_t* t, int32_t symbol);
+    void (*init)(huffman_tree_type* t, huffman_node_type nodes[], 
+                 const int32_t m);
+    void (*inc_frequency)(huffman_tree_type* t, int32_t symbol);
 } huffman_interface;
 
 extern huffman_interface huffman;
@@ -44,7 +44,15 @@ extern huffman_interface huffman;
 
 #define huffman_implemented
 
-static void huffman_update_paths(huffman_tree_t* t, int32_t i) {
+#ifndef assert
+#include <assert.h>
+#endif
+
+#ifndef null
+#define null ((void*)0)
+#endif
+
+static void huffman_update_paths(huffman_tree_type* t, int32_t i) {
     t->stats.updates++;
     const int32_t m = t->n * 2 - 1;
     if (i == m - 1) { t->depth = 0; } // root
@@ -67,7 +75,8 @@ static void huffman_update_paths(huffman_tree_t* t, int32_t i) {
     }
 }
 
-static int32_t huffman_swap_siblings_if_necessary(huffman_tree_t* t, const int32_t ix) {
+static int32_t huffman_swap_siblings_if_necessary(huffman_tree_type* t, 
+                                                  const int32_t ix) {
     const int32_t m = t->n * 2 - 1;
     assert(0 <= ix && ix < m);
     if (ix < m - 1) { // not root
@@ -85,15 +94,15 @@ static int32_t huffman_swap_siblings_if_necessary(huffman_tree_t* t, const int32
     return ix;
 }
 
-static void huffman_frequency_changed(huffman_tree_t* t, int32_t i);
+static void huffman_frequency_changed(huffman_tree_type* t, int32_t i);
 
-static void huffman_update_freq(huffman_tree_t* t, int32_t i) {
+static void huffman_update_freq(huffman_tree_type* t, int32_t i) {
     const int32_t lix = t->node[i].lix; assert(lix != -1);
     const int32_t rix = t->node[i].rix; assert(rix != -1);
     t->node[i].freq = t->node[lix].freq + t->node[rix].freq;
 }
 
-static void huffman_move_up(huffman_tree_t* t, int32_t i) {
+static void huffman_move_up(huffman_tree_type* t, int32_t i) {
     const int32_t pix = t->node[i].pix; // parent
     assert(pix != -1);
     const int32_t gix = t->node[pix].pix; // grandparent
@@ -125,7 +134,7 @@ static void huffman_move_up(huffman_tree_t* t, int32_t i) {
     }
 }
 
-static void huffman_frequency_changed(huffman_tree_t* t, int32_t i) {
+static void huffman_frequency_changed(huffman_tree_type* t, int32_t i) {
     const int32_t m = t->n * 2 - 1; (void)m;
     const int32_t pix = t->node[i].pix;
     if (pix == -1) { // `i` is root
@@ -144,7 +153,7 @@ static void huffman_frequency_changed(huffman_tree_t* t, int32_t i) {
     }
 }
 
-static void huffman_inc_frequency(huffman_tree_t* t, int32_t i) {
+static void huffman_inc_frequency(huffman_tree_type* t, int32_t i) {
     assert(0 <= i && i < t->n); // terminal
     // If input sequence frequencies are severely skewed (e.g. Lucas numbers
     // similar to Fibonacci numbers) and input sequence is long enough.
@@ -170,7 +179,8 @@ static int32_t huffman_log2_of_pow2(uint64_t pow2) {
     return bit;
 }
 
-static void huffman_init(huffman_tree_t* t, huffman_node_t nodes[], const int32_t m) {
+static void huffman_init(huffman_tree_type* t, huffman_node_type nodes[], 
+                         const int32_t m) {
     assert(m >= 7); // must pow(2, bits_per_symbol) * 2 - 1
     const int32_t n = (m + 1) / 2;
     assert(n > 4 && (n & (n - 1)) == 0); // must be power of 2
@@ -182,7 +192,7 @@ static void huffman_init(huffman_tree_t* t, huffman_node_t nodes[], const int32_
     t->depth = bits_per_symbol;
     t->complete = 0;
     for (int32_t i = 0; i < n; i++) {
-        t->node[i] = (huffman_node_t){
+        t->node[i] = (huffman_node_type){
             .freq = 1, .lix = -1, .rix = -1, .pix = n + i / 2,
             .bits = bits_per_symbol
         };
@@ -197,7 +207,7 @@ static void huffman_init(huffman_tree_t* t, huffman_node_t nodes[], const int32_
         for (int32_t i = 0; i < n2; i++) {
             uint64_t f = t->node[lix].freq + t->node[rix].freq;
             assert(ix < m);
-            t->node[ix] = (huffman_node_t){
+            t->node[ix] = (huffman_node_type){
                 .freq = f, .lix = lix, .rix = rix, .pix = pix, .bits = bits };
             lix += 2;
             rix += 2;

@@ -15,23 +15,23 @@ typedef struct {
     int32_t entries;
     int32_t max_chain;
     int32_t max_bytes;
-} map_t;
+} map_type;
 
 typedef struct {
-    void          (*init)(map_t* m, map_entry_t entry[], int32_t n);
-    const void*   (*data)(const map_t* m, int32_t i);
+    void          (*init)(map_type* m, map_entry_t entry[], int32_t n);
+    const void*   (*data)(const map_type* m, int32_t i);
     const int32_t (*bytes)(const void* data); // b(null) returns 0
-    const int32_t (*get)(const map_t* m, const void* data, uint8_t bytes);
-    void          (*put)(map_t* m, const void* data, uint8_t bytes);
-    const int32_t (*best)(const map_t* m, const void* data, size_t bytes);
-    void          (*clear)(map_t *m);
-} map_if;
+    const int32_t (*get)(const map_type* m, const void* data, uint8_t bytes);
+    void          (*put)(map_type* m, const void* data, uint8_t bytes);
+    const int32_t (*best)(const map_type* m, const void* data, size_t bytes);
+    void          (*clear)(map_type *m);
+} map_interface;
 
 // map.put()  is no operation if map is filled to 75% or more
 // map.get()  returns index of matching entry or -1
 // map.best() returns index of longest matching entry or -1
 
-extern map_if map;
+extern map_interface map;
 
 #endif // map_header_included
 
@@ -63,7 +63,7 @@ static inline uint64_t map_hash64_byte(uint64_t hash, const uint8_t byte) {
 }
 
 static inline uint64_t map_hash64(const uint8_t* data, size_t bytes) {
-    enum { max_bytes = sizeof(((map_t*)(null))->entry[0]) - 1 };
+    enum { max_bytes = sizeof(((map_type*)(null))->entry[0]) - 1 };
     assert(2 <= bytes && bytes <= max_bytes);
     uint64_t hash = map_hash_init;
     for (size_t i = 0; i < bytes; i++) {
@@ -72,7 +72,7 @@ static inline uint64_t map_hash64(const uint8_t* data, size_t bytes) {
     return hash;
 }
 
-static void map_init(map_t* m, map_entry_t entry[], int32_t n) {
+static void map_init(map_type* m, map_entry_t entry[], int32_t n) {
     assert(16 < n && n < 1024 * 1024);
     m->n = n;
     m->entry = entry;
@@ -82,7 +82,7 @@ static void map_init(map_t* m, map_entry_t entry[], int32_t n) {
     m->max_bytes = 0;
 }
 
-const inline void* map_data(const map_t* m, int32_t i) {
+const inline void* map_data(const map_type* m, int32_t i) {
     assert(0 <= i && i < m->n);
     return m->entry[i][0] > 0 ? &m->entry[i][1] : null;
 }
@@ -91,7 +91,7 @@ const inline int32_t map_bytes(const void* data) {
     return data == null ? 0 : *(((uint8_t*)data) - 1);
 }
 
-static const int32_t map_get(const map_t* m, const void* d, uint8_t b) {
+static const int32_t map_get(const map_type* m, const void* d, uint8_t b) {
     enum { max_bytes = sizeof(m->entry[0]) - 1 };
     assert(2 <= b && b <= max_bytes);
     const map_entry_t* entries = m->entry;
@@ -108,7 +108,7 @@ static const int32_t map_get(const map_t* m, const void* d, uint8_t b) {
     return -1;
 }
 
-static void map_put(map_t* m, const uint8_t* d, uint8_t b) {
+static void map_put(map_type* m, const uint8_t* d, uint8_t b) {
     enum { max_bytes = sizeof(m->entry[0]) - 1 };
     assert(2 <= b && b <= max_bytes);
     if (m->entries < m->n * 3 / 4) {
@@ -132,7 +132,7 @@ static void map_put(map_t* m, const uint8_t* d, uint8_t b) {
     }
 }
 
-const int32_t map_best(const map_t* m, const void* data, size_t bytes) {
+const int32_t map_best(const map_type* m, const void* data, size_t bytes) {
     enum { max_bytes = sizeof(m->entry[0]) - 1 };
     int32_t best = -1; // best (longest) result
     if (bytes > 1) {
@@ -152,7 +152,7 @@ const int32_t map_best(const map_t* m, const void* data, size_t bytes) {
     return best;
 }
 
-static void map_clear(map_t *m) {
+static void map_clear(map_type *m) {
     for (int32_t i = 0; i < m->n; i++) {
         m->entry[i][0] = 0;
     }
@@ -161,7 +161,7 @@ static void map_clear(map_t *m) {
     m->max_bytes = 0;
 }
 
-map_if map = {
+map_interface map = {
     .init  = map_init,
     .get   = map_get,
     .put   = map_put,
