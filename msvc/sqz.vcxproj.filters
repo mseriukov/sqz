@@ -7,9 +7,11 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="../lz77.h" />
     <ClInclude Include="../rt.h" />
     <ClInclude Include="..\map.h" />
+    <ClInclude Include="..\bitstream.h" />
+    <ClInclude Include="..\huffman.h" />
+    <ClInclude Include="..\sqz.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="../scripts/download.bat" />

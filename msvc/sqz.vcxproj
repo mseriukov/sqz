@@ -19,9 +19,11 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="../lz77.h" />
     <ClInclude Include="../rt.h" />
+    <ClInclude Include="..\bitstream.h" />
+    <ClInclude Include="..\huffman.h" />
     <ClInclude Include="..\map.h" />
+    <ClInclude Include="..\sqz.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="../test.c" />

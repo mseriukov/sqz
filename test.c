@@ -5,11 +5,11 @@
 #define println(...)   rt_println(__VA_ARGS__)
 
 #include "map.h"
-#include "lz77.h"
+#include "sqz.h"
 
-enum { lzn_window_bits = 11 };
+enum { window_bits = 11 };
 
-static uint64_t file_read(lz77_t* lz) {
+static uint64_t file_read(sqz_t* lz) {
     uint64_t buffer = 0;
     if (lz->error == 0) { // sticky
         FILE* f = (FILE*)lz->that;
@@ -22,7 +22,7 @@ static uint64_t file_read(lz77_t* lz) {
     return buffer;
 }
 
-static void file_write(lz77_t* lz, uint64_t buffer) {
+static void file_write(sqz_t* lz, uint64_t buffer) {
     if (lz->error == 0) {
         FILE* f = (FILE*)lz->that;
         const size_t bytes = sizeof(buffer);
@@ -46,12 +46,12 @@ static errno_t compress(const char* fn, const uint8_t* data, size_t bytes) {
         rt_println("Failed to create \"%s\": %s", fn, strerror(r));
         return r;
     }
-    lz77_t lz = {
+    sqz_t lz = {
         .that = (void*)out,
         .write = file_write
     };
-    lz77.write_header(&lz, bytes, lzn_window_bits);
-    lz77.compress(&lz, data, bytes, lzn_window_bits);
+    sqz.write_header(&lz, bytes, window_bits);
+    sqz.compress(&lz, data, bytes, window_bits);
     rt_assert(lz.error == 0);
     r = fclose(out) == 0 ? 0 : errno; // e.g. overflow writing buffered output
     if (r != 0) {
@@ -82,14 +82,14 @@ static errno_t verify(const char* fn, const uint8_t* input, size_t size) {
         rt_println("Failed to open \"%s\"", fn);
         return r;
     }
-    lz77_t lz = {
+    sqz_t lz = {
         .that = (void*)in,
         .read = file_read
     };
     size_t bytes = 0;
     uint8_t window_bits = 0;
-    lz77.read_header(&lz, &bytes, &window_bits);
-    rt_assert(lz.error == 0 && bytes == size && window_bits == lzn_window_bits);
+    sqz.read_header(&lz, &bytes, &window_bits);
+    rt_assert(lz.error == 0 && bytes == size && window_bits == window_bits);
     uint8_t* data = (uint8_t*)malloc(bytes + 1);
     if (data == null) {
         rt_println("Failed to allocate memory for decompressed data");
@@ -97,7 +97,7 @@ static errno_t verify(const char* fn, const uint8_t* input, size_t size) {
         return ENOMEM;
     }
     data[bytes] = 0x00;
-    lz77.decompress(&lz, data, bytes, lzn_window_bits);
+    sqz.decompress(&lz, data, bytes, window_bits);
     fclose(in);
     rt_assert(lz.error == 0);
     if (lz.error == 0) {
@@ -246,14 +246,16 @@ int main(int argc, const char* argv[]) {
     return r;
 }
 
-#define lz77_assert(b, ...) rt_assert(b, __VA_ARGS__)
-#define lz77_println(...)   rt_println(__VA_ARGS__)
-
-#define lz77_historgram // to dump histograms on compress (comment next line)
-#undef  lz77_historgram // no histograms
-
-#define map_implementation // this will include the implementation of word
+#define map_implementation
 #include "map.h"
 
-#define lz77_implementation // this will include the implementation of lz77
-#include "lz77.h"
+#define bitstream_implementation
+#include "bitstream.h"
+
+#define huffman_implementation
+#include "huffman.h"
+
+#define sqz_implementation
+#include "sqz.h"
+
+
