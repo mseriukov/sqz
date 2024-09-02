@@ -14,17 +14,17 @@ typedef struct bitstream_struct {
     uint64_t read;  // number of bytes read
     uint64_t b64;   // bit shifting buffer
     int32_t  bits;  // bit count inside b64
-    int32_t  padding;
+    errno_t  error; // sticky error
 } bitstream_type;
 
 typedef struct {
-    void    (*create)(bitstream_type* bs, void* data, size_t capacity);
-    errno_t (*write_bit)(bitstream_type* bs, int32_t bit);
-    errno_t (*write_bits)(bitstream_type* bs, uint64_t data, int32_t bits);
-    errno_t (*read_bit)(bitstream_type* bs, bool *bit);
-    errno_t (*read_bits)(bitstream_type* bs, uint64_t *data, int32_t bits);
-    errno_t (*flush)(bitstream_type* bs); // write trailing zeros
-    void    (*dispose)(bitstream_type* bs);
+    void     (*create)(bitstream_type* bs, void* data, size_t capacity);
+    void     (*write_bit)(bitstream_type* bs, int32_t bit);
+    void     (*write_bits)(bitstream_type* bs, uint64_t data, int32_t bits);
+    bool     (*read_bit)(bitstream_type* bs);
+    uint64_t (*read_bits)(bitstream_type* bs, int32_t bits);
+    void     (*flush)(bitstream_type* bs); // write trailing zeros
+    void     (*dispose)(bitstream_type* bs);
 } bitstream_interface;
 
 extern bitstream_interface bitstream;
@@ -35,85 +35,83 @@ extern bitstream_interface bitstream;
 
 #define bitstream_implemented
 
-static errno_t bitstream_write_bit(bitstream_type* bs, int32_t bit) {
-    errno_t r = 0;
-    bs->b64 <<= 1;
-    bs->b64 |= (bit & 1);
-    bs->bits++;
-    if (bs->bits == 64) {
-        if (bs->data != null && bs->capacity > 0) {
-            assert(bs->file == null);
-            for (int i = 0; i < 8 && r == 0; i++) {
-                if (bs->bytes == bs->capacity) {
-                    r = E2BIG;
-                } else {
-                    bs->data[bs->bytes++] = (bs->b64 >> ((7 - i) * 8)) & 0xFF;
+static void bitstream_write_bit(bitstream_type* bs, int32_t bit) {
+    if (bs->error == 0) {
+        bs->b64 <<= 1;
+        bs->b64 |= (bit & 1);
+        bs->bits++;
+        if (bs->bits == 64) {
+            if (bs->data != null && bs->capacity > 0) {
+                assert(bs->file == null);
+                for (int i = 0; i < 8 && bs->error == 0; i++) {
+                    if (bs->bytes == bs->capacity) {
+                        bs->error = E2BIG;
+                    } else {
+                        uint8_t b = (uint8_t)(bs->b64 >> ((7 - i) * 8));
+                        bs->data[bs->bytes++] = b;
+                    }
                 }
+            } else {
+                assert(bs->data == null && bs->capacity == 0);
+                size_t written = fwrite(&bs->b64, 1, 8, bs->file);
+                bs->error = written == 8 ? 0 : errno;
+                if (bs->error == 0) { bs->bytes += 8; }
             }
-        } else {
-            assert(bs->data == null && bs->capacity == 0);
-            size_t written = fwrite(&bs->b64, 1, 8, bs->file);
-            r = written == 8 ? 0 : errno;
-            if (r == 0) { bs->bytes += 8; }
+            bs->bits = 0;
+            bs->b64 = 0;
         }
-        bs->bits = 0;
-        bs->b64 = 0;
     }
-    return r;
 }
 
-static errno_t bitstream_write_bits(bitstream_type* bs, uint64_t data, int32_t bits) {
+static void bitstream_write_bits(bitstream_type* bs, uint64_t data,
+                                 int32_t bits) {
     assert(0 < bits && bits <= 64);
-    errno_t r = 0;
-    while (bits > 0 && r == 0) {
-        r = bitstream_write_bit(bs, data & 1);
+    while (bits > 0 && bs->error == 0) {
+        bitstream_write_bit(bs, data & 1);
         bits--;
         data >>= 1;
     }
-    return r;
 }
 
-static errno_t bitstream_read_bit(bitstream_type* bs, bool *bit) {
-    errno_t r = 0;
-    if (bs->bits == 0) {
-        bs->b64 = 0;
-        if (bs->data != null && bs->bytes > 0) {
-            assert(bs->file == null);
-            for (int i = 0; i < 8 && r == 0; i++) {
-                if (bs->read == bs->bytes) {
-                    r = E2BIG;
-                } else {
-                    const uint64_t byte = (bs->data[bs->read] & 0xFF);
-                    bs->b64 |= byte << ((7 - i) * 8);
-                    bs->read++;
+static bool bitstream_read_bit(bitstream_type* bs) {
+    bool bit = false;
+    if (bs->error == 0) {
+        if (bs->bits == 0) {
+            bs->b64 = 0;
+            if (bs->data != null && bs->bytes > 0) {
+                assert(bs->file == null);
+                for (int i = 0; i < 8 && bs->error == 0; i++) {
+                    if (bs->read == bs->bytes) {
+                        bs->error = E2BIG;
+                    } else {
+                        const uint64_t byte = (bs->data[bs->read] & 0xFF);
+                        bs->b64 |= byte << ((7 - i) * 8);
+                        bs->read++;
+                    }
                 }
+            } else {
+                assert(bs->data == null && bs->bytes == 0);
+                size_t read = fread(&bs->b64, 1, 8, bs->file);
+                bs->error = read == 8 ? 0 : errno;
+                if (bs->error == 0) { bs->read += 8; }
             }
-        } else {
-            assert(bs->data == null && bs->bytes == 0);
-            size_t read = fread(&bs->b64, 1, 8, bs->file);
-            r = read == 8 ? 0 : errno;
-            if (r == 0) { bs->read += 8; }
+            bs->bits = 64;
         }
-        bs->bits = 64;
+        bit = ((int64_t)bs->b64) < 0; // same as (bs->b64 >> 63) & 1;
+        bs->b64 <<= 1;
+        bs->bits--;
     }
-    bool b = ((int64_t)bs->b64) < 0; // same as (bs->b64 >> 63) & 1;
-    bs->b64 <<= 1;
-    bs->bits--;
-    *bit = (bool)b;
-    return r;
+    return bit;
 }
 
-static errno_t bitstream_read_bits(bitstream_type* bs, uint64_t *data, int32_t bits) {
+static uint64_t bitstream_read_bits(bitstream_type* bs, int32_t bits) {
+    uint64_t data = 0;
     assert(0 < bits && bits <= 64);
-    errno_t r = 0;
-    bool bit = 0;
-    uint64_t d = 0;
-    for (int32_t b = 0; b < bits && r == 0; b++) {
-        r = bitstream_read_bit(bs, &bit);
-        if (bit) { d |= ((uint64_t)bit) << b; }
+    for (int32_t b = 0; b < bits && bs->error == 0; b++) {
+        bool bit = bitstream_read_bit(bs);
+        if (bit) { data |= ((uint64_t)bit) << b; }
     }
-    if (r == 0) { *data = d; }
-    return r;
+    return data;
 }
 
 static void bitstream_create(bitstream_type* bs, void* data, size_t capacity) {
@@ -123,10 +121,8 @@ static void bitstream_create(bitstream_type* bs, void* data, size_t capacity) {
     bs->capacity  = capacity;
 }
 
-static errno_t bitstream_flush(bitstream_type* bs) {
-    errno_t r = 0;
-    while (bs->bits > 0 && r == 0) { r = bitstream_write_bit(bs, 0); }
-    return r;
+static void bitstream_flush(bitstream_type* bs) {
+    while (bs->bits > 0 && bs->error == 0) { bitstream_write_bit(bs, 0); }
 }
 
 static void bitstream_dispose(bitstream_type* bs) {

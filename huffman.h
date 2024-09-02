@@ -7,7 +7,7 @@
 // Adaptive Huffman Coding
 // https://en.wikipedia.org/wiki/Adaptive_Huffman_coding
 
-typedef struct {
+typedef struct huffman_node_struct {
     uint64_t freq;
     uint64_t path;
     int32_t  bits; // 0 for root
@@ -16,7 +16,7 @@ typedef struct {
     int32_t  rix;  // right
 } huffman_node_type;
 
-typedef struct {
+typedef struct huffman_tree_struct {
     huffman_node_type* node;
     int32_t n;
     int32_t depth; // max tree depth seen
@@ -31,9 +31,10 @@ typedef struct {
 } huffman_tree_type;
 
 typedef struct {
-    void (*init)(huffman_tree_type* t, huffman_node_type nodes[], 
-                 const int32_t m);
+    void (*init)(huffman_tree_type* t, huffman_node_type nodes[],
+                 const size_t m);
     void (*inc_frequency)(huffman_tree_type* t, int32_t symbol);
+    uint8_t (*log2_of_pow2)(uint64_t pow2);
 } huffman_interface;
 
 extern huffman_interface huffman;
@@ -75,7 +76,7 @@ static void huffman_update_paths(huffman_tree_type* t, int32_t i) {
     }
 }
 
-static int32_t huffman_swap_siblings_if_necessary(huffman_tree_type* t, 
+static int32_t huffman_swap_siblings_if_necessary(huffman_tree_type* t,
                                                   const int32_t ix) {
     const int32_t m = t->n * 2 - 1;
     assert(0 <= ix && ix < m);
@@ -172,20 +173,25 @@ static void huffman_inc_frequency(huffman_tree_type* t, int32_t i) {
     }
 }
 
-static int32_t huffman_log2_of_pow2(uint64_t pow2) {
+static uint8_t huffman_log2_of_pow2(uint64_t pow2) {
     assert(pow2 > 0 && (pow2 & (pow2 - 1)) == 0);
-    int32_t bit = 0;
-    while (pow2 >>= 1) { bit++; }
-    return bit;
+    if (pow2 > 0 && (pow2 & (pow2 - 1)) == 0) {
+        uint8_t bit = 0;
+        while (pow2 >>= 1) { bit++; }
+        return bit;
+    } else {
+        return 0xFF; // error
+    }
 }
 
-static void huffman_init(huffman_tree_type* t, huffman_node_type nodes[], 
-                         const int32_t m) {
-    assert(m >= 7); // must pow(2, bits_per_symbol) * 2 - 1
-    const int32_t n = (m + 1) / 2;
+static void huffman_init(huffman_tree_type* t, huffman_node_type nodes[],
+                         const size_t count) {
+    assert(7 <= count && count < INT32_MAX); // must pow(2, bits_per_symbol) * 2 - 1
+    const int32_t m = (int32_t)count;
+    const int32_t n = (int32_t)(m + 1) / 2;
     assert(n > 4 && (n & (n - 1)) == 0); // must be power of 2
     const int32_t bits_per_symbol = huffman_log2_of_pow2(n);
-    assert(bits_per_symbol >= 2);
+    assert(2 <= bits_per_symbol && bits_per_symbol <= 20);
     memset(&t->stats, 0x00, sizeof(t->stats));
     t->node = nodes;
     t->n = n;
@@ -228,7 +234,8 @@ static void huffman_init(huffman_tree_type* t, huffman_node_type nodes[],
 
 huffman_interface huffman = {
     .init          = huffman_init,
-    .inc_frequency = huffman_inc_frequency
+    .inc_frequency = huffman_inc_frequency,
+    .log2_of_pow2  = huffman_log2_of_pow2
 };
 
 #endif

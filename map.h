@@ -18,7 +18,7 @@ typedef struct {
 } map_type;
 
 typedef struct {
-    void          (*init)(map_type* m, map_entry_t entry[], int32_t n);
+    void          (*init)(map_type* m, map_entry_t entry[], size_t n);
     const void*   (*data)(const map_type* m, int32_t i);
     const int32_t (*bytes)(const void* data); // b(null) returns 0
     const int32_t (*get)(const map_type* m, const void* data, uint8_t bytes);
@@ -72,9 +72,9 @@ static inline uint64_t map_hash64(const uint8_t* data, size_t bytes) {
     return hash;
 }
 
-static void map_init(map_type* m, map_entry_t entry[], int32_t n) {
+static void map_init(map_type* m, map_entry_t entry[], size_t n) {
     assert(16 < n && n < 1024 * 1024);
-    m->n = n;
+    m->n = (int32_t)n;
     m->entry = entry;
     for (int32_t i = 0; i < m->n; i++) { m->entry[i][0] = 0; }
     m->entries = 0;
