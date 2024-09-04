@@ -18,13 +18,13 @@ typedef struct {
 } map_type;
 
 typedef struct {
-    void          (*init)(map_type* m, map_entry_t entry[], size_t n);
-    const void*   (*data)(const map_type* m, int32_t i);
-    const int32_t (*bytes)(const void* data); // b(null) returns 0
-    const int32_t (*get)(const map_type* m, const void* data, uint8_t bytes);
-    void          (*put)(map_type* m, const void* data, uint8_t bytes);
-    const int32_t (*best)(const map_type* m, const void* data, size_t bytes);
-    void          (*clear)(map_type *m);
+    void        (*init)(map_type* m, map_entry_t entry[], size_t n);
+    const void* (*data)(const map_type* m, int32_t i);
+    int8_t      (*bytes)(const map_type* m, int32_t i);
+    int32_t     (*get)(const map_type* m, const void* data, uint8_t bytes);
+    int32_t     (*put)(map_type* m, const void* data, uint8_t bytes);
+    int32_t     (*best)(const map_type* m, const void* data, size_t bytes);
+    void        (*clear)(map_type *m);
 } map_interface;
 
 // map.put()  is no operation if map is filled to 75% or more
@@ -82,20 +82,22 @@ static void map_init(map_type* m, map_entry_t entry[], size_t n) {
     m->max_bytes = 0;
 }
 
-const inline void* map_data(const map_type* m, int32_t i) {
+static inline const void* map_data(const map_type* m, int32_t i) {
     assert(0 <= i && i < m->n);
     return m->entry[i][0] > 0 ? &m->entry[i][1] : null;
 }
 
-const inline int32_t map_bytes(const void* data) {
-    return data == null ? 0 : *(((uint8_t*)data) - 1);
+static inline int8_t map_bytes(const map_type* m, int32_t i) {
+    assert(0 <= i && i < m->n);
+    return m->entry[i][0];
 }
 
-static const int32_t map_get(const map_type* m, const void* d, uint8_t b) {
+
+static int32_t map_get_hashed(const map_type* m, uint64_t hash,
+                              const void* d, uint8_t b) {
     enum { max_bytes = sizeof(m->entry[0]) - 1 };
     assert(2 <= b && b <= max_bytes);
     const map_entry_t* entries = m->entry;
-    uint64_t hash = map_hash64(d, b);
     size_t i = (size_t)hash % m->n;
     // Because map is filled to 3/4 only there will always be
     // an empty slot at the end of the chain.
@@ -108,7 +110,11 @@ static const int32_t map_get(const map_type* m, const void* d, uint8_t b) {
     return -1;
 }
 
-static void map_put(map_type* m, const uint8_t* d, uint8_t b) {
+static int32_t map_get(const map_type* m, const void* d, uint8_t b) {
+    return map_get_hashed(m, map_hash64(d, b), d, b);
+}
+
+static int32_t map_put(map_type* m, const uint8_t* d, uint8_t b) {
     enum { max_bytes = sizeof(m->entry[0]) - 1 };
     assert(2 <= b && b <= max_bytes);
     if (m->entries < m->n * 3 / 4) {
@@ -118,7 +124,7 @@ static void map_put(map_type* m, const uint8_t* d, uint8_t b) {
         int32_t chain = 0; // max chain length
         while (entries[i][0] > 0) {
             if (entries[i][0] == b && memcmp(entries[i] + 1, d, b) == 0) {
-                return; // found match with existing entry
+                return (int32_t)i; // found match with existing entry
             }
             chain++;
             i = (i + 1) % m->n;
@@ -129,19 +135,21 @@ static void map_put(map_type* m, const uint8_t* d, uint8_t b) {
         entries[i][0] = b;
         memcpy(entries[i] + 1, d, b);
         m->entries++;
+        return (int32_t)i;
     }
+    return -1;
 }
 
-const int32_t map_best(const map_type* m, const void* data, size_t bytes) {
+static int32_t map_best(const map_type* m, const void* data, size_t bytes) {
     enum { max_bytes = sizeof(m->entry[0]) - 1 };
     int32_t best = -1; // best (longest) result
     if (bytes > 1) {
         const uint8_t  b = (uint8_t)(bytes <= max_bytes ? bytes : max_bytes);
         const uint8_t* d = (uint8_t*)data;
         uint64_t hash = map_hash64_byte(map_hash_init, d[0]);
-        for (uint8_t i = 1; i < b; i++) {
+        for (uint8_t i = 1; i < b - 1; i++) {
             hash = map_hash64_byte(hash, d[i]);
-            int32_t r = map_get(m, data, i);
+            int32_t r = map_get_hashed(m, hash, data, i + 1);
             if (r != -1) {
                 best = r;
             } else if (best != -1) {
