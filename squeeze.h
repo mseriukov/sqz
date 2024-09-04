@@ -8,6 +8,8 @@
 #include "huffman.h"
 #include "map.h"
 
+const uint8_t* input_data; // TODO: remove
+
 enum {
     squeeze_min_win_bits = 10,
     squeeze_max_win_bits = 20,
@@ -235,6 +237,8 @@ if (s->map.entries <= 0) {
     }
 }
 
+static int write_count;
+
 static void squeeze_compress(squeeze_type* s, const uint8_t* data, uint64_t bytes) {
     squeeze_if_error_return(s);
     const uint8_t win_bits = huffman.log2_of_pow2(s->pos.n);
@@ -284,7 +288,7 @@ static void squeeze_compress(squeeze_type* s, const uint8_t* data, uint64_t byte
             i += len;
         } else {
             int32_t best = map.best(&s->map, &data[i], bytes - i);
-best = -1;
+//best = -1;
             if (best >= 0) {
                 assert(best < INT32_MAX);
                 assert(map.bytes(&s->map, best) >= 3);
@@ -295,16 +299,19 @@ best = -1;
                 // len == 1 indicates that it's a dictionary word
                 squeeze_write_huffman(s, &s->len, 1);
                 squeeze_if_error_return(s);
-static int write_count;
-if (write_count == 0) {
+if (write_count < 0) {
                 printf("best[%d] bytes:%d bits:%d map.entries:%d\n",
                     best, map.bytes(&s->map, best), s->dic.node[best].bits, s->map.entries);
+                for (int j = 0; j < s->dic.node[best].bits; j++) {
+                    printf("%d", (s->dic.node[best].path & (1ULL << j)) != 0);
+                }
+                printf("\n");
 }
 write_count++;
                 assert(s->dic.node[best].bits <= 0xFF);
                 squeeze_write_huffman(s, &s->dic, (int32_t)best);
                 squeeze_if_error_return(s);
-                i += s->map_entries[best][0];
+                i += map.bytes(&s->map, best);
             } else {
                 const uint8_t b = data[i];
                 // European texts are predominantly spaces and small ASCII letters:
@@ -324,12 +331,12 @@ write_count++;
                     squeeze_write_huffman(s, &s->sym, b);
                     squeeze_if_error_return(s);
                 }
-                huffman.inc_frequency(&s->sym, b);
                 i++;
             }
         }
     }
     squeeze_flush(s);
+    printf("dic: %d\n", write_count);
 //  double len_bits = squeeze_entropy(len_freq, (int32_t)window);
 //  double pos_bits = squeeze_entropy(pos_freq, (int32_t)window);
 //  printf("bits len: %.2f pos: %.2f words: %d "
@@ -432,21 +439,29 @@ static void squeeze_decompress(squeeze_type* s, uint8_t* data, uint64_t bytes) {
                     uint64_t wix = squeeze_read_huffman(s, &s->dic);
                     squeeze_if_error_return(s);
 static int read_count;
-if (read_count == 0) {
+if (read_count < 4) {
     printf("[%d] bytes: %d map.entries: %d\n", wix, map.bytes(&s->map, (int32_t)wix), s->map.entries);
+    for (int j = 0; j < s->dic.node[wix].bits; j++) {
+        printf("%d", (s->dic.node[wix].path & (1ULL << j)) != 0);
+    }
+    printf("\n");
 }
 read_count++;
                     assert(wix < (uint64_t)s->map.n);
 if (map.bytes(&s->map, (int32_t)wix) < 3) {
     printf("[%d] bytes: %d map.entries: %d\n", wix, map.bytes(&s->map, (int32_t)wix), s->map.entries);
+    for (int j = 0; j < s->dic.node[wix].bits; j++) {
+        printf("%d", (s->dic.node[wix].path & (1ULL << j)) != 0);
+    }
+    printf("\n");
 }
-
-
                     assert(map.bytes(&s->map, (int32_t)wix) >= 3);
                     size_t n = map.bytes(&s->map, (int32_t)wix);
                     assert(i + n <= bytes);
+                    const uint8_t* d = (const uint8_t*)map.data(&s->map, (int32_t)wix);
                     for (size_t j = 0; j < n; j++) {
-                        data[i] = s->map_entries[wix][j];
+                        data[i] = d[j];
+                        assert(input_data[i] == data[i]);
                         i++;
                     }
                 } else {
@@ -463,7 +478,7 @@ if (map.bytes(&s->map, (int32_t)wix) < 3) {
                     uint8_t* d = data - (size_t)pos;
                     const size_t n = i + (size_t)len;
                     uint8_t* w = d + i;
-                    while (i < n) { data[i] = d[i]; i++; }
+                    while (i < n) { data[i] = d[i]; assert(input_data[i] == data[i]); i++; }
                     squeeze_add_to_dictionary(s, w, len);
                 }
             } else { // byte >= 0x80
@@ -471,16 +486,16 @@ if (map.bytes(&s->map, (int32_t)wix) < 3) {
 //              uint64_t b = squeeze_read_bits(s, 7);
                 squeeze_if_error_return(s);
                 data[i] = (uint8_t)b | 0x80;
+assert(input_data[i] == data[i]);
                 i++;
-                huffman.inc_frequency(&s->sym, (int32_t)b);
             }
         } else { // literal byte (ASCII byte < 0x80)
 //          uint64_t b = squeeze_read_bits(s, 7);
             uint64_t b = squeeze_read_huffman(s, &s->sym);
             squeeze_if_error_return(s);
             data[i] = (uint8_t)b;
+assert(input_data[i] == data[i]);
             i++;
-            huffman.inc_frequency(&s->sym, (int32_t)b);
         }
     }
 }

@@ -171,9 +171,10 @@ static void map_clear(map_type *m) {
 
 map_interface map = {
     .init  = map_init,
+    .data  = map_data,
+    .bytes = map_bytes,
     .get   = map_get,
     .put   = map_put,
-    .bytes = map_bytes,
     .best  = map_best,
     .clear = map_clear
 };

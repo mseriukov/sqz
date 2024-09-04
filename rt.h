@@ -203,7 +203,7 @@ static int32_t rt_printf_implementation(const char* file, int32_t line,
 static int32_t rt_exit(int exit_code) {
     _Pragma("warning(push)")
     _Pragma("warning(disable: 4702)") /* unreachable code */
-    if (exit_code == 0) { rt_printf("exit code must not be zero"); }
+    if (exit_code == 0) { rt_printf("exit code must be non-zero"); }
     if (exit_code != 0) {
         #ifdef _WINDOWS_
             DebugBreak();

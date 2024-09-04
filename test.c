@@ -137,6 +137,9 @@ source = s;
 }
 
 static errno_t verify(const char* fn, const uint8_t* input, size_t size) {
+
+input_data = input; // TODO: remove
+
     // decompress and compare
     FILE* in = null; // compressed file
     errno_t r = fopen_s(&in, fn, "rb");
@@ -187,6 +190,15 @@ printf("map: %d\n", s->map.entries);
                 for (int i = 0; i < s->map.entries; i++) {
                     assert(s->map.entry[i][0] == source->map.entry[i][0]);
                     assert(memcmp(s->map.entry[i] + 1, source->map.entry[i] + 1, s->map.entry[i][0]) == 0);
+                }
+                for (int i = 0; i < s->pos.n; i++) {
+                    assert(memcmp(&s->pos.node[i], &source->pos.node[i], sizeof(s->pos.node[i])) == 0);
+                }
+                for (int i = 0; i < s->len.n; i++) {
+                    assert(memcmp(&s->len.node[i], &source->len.node[i], sizeof(s->len.node[i])) == 0);
+                }
+                for (int i = 0; i < s->pos.n; i++) {
+                    assert(memcmp(&s->dic.node[i], &source->dic.node[i], sizeof(s->dic.node[i])) == 0);
                 }
             }
             free(data);
