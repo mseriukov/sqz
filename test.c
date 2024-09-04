@@ -76,11 +76,9 @@ static void squeeze_delete(squeeze_type* s) {
     free(s);
 }
 
-squeeze_type* source; // TODO: remove
-
 static errno_t compress(const char* from, const char* to,
                         const uint8_t* data, uint64_t bytes) {
-    enum { bits_win = 11, bits_map = 19, bits_len = 6 };
+    enum { bits_win = 12, bits_map = 19, bits_len = 4 };
     FILE* out = null; // compressed file
     errno_t r = fopen_s(&out, to, "wb") != 0;
     if (r != 0 || out == null) {
@@ -126,20 +124,14 @@ static errno_t compress(const char* from, const char* to,
                 printf("%7lld -> %7lld %5.1f%%\n", bytes, written, percent);
             }
         }
-        printf("map: %d\n", s->map.entries);
     }
     if (s != null) {
-// TODO:
-//      squeeze_delete(s); s = null;
-source = s;
+        squeeze_delete(s); s = null;
     }
     return r;
 }
 
 static errno_t verify(const char* fn, const uint8_t* input, size_t size) {
-
-input_data = input; // TODO: remove
-
     // decompress and compare
     FILE* in = null; // compressed file
     errno_t r = fopen_s(&in, fn, "rb");
@@ -184,21 +176,6 @@ input_data = input; // TODO: remove
                     r = ENODATA; // or EIO
                 } else if (bytes < 128) {
                     printf("decompressed: %.*s\n", (unsigned int)bytes, data);
-                }
-printf("map: %d\n", s->map.entries);
-                // dictionaries are the same:
-                for (int i = 0; i < s->map.entries; i++) {
-                    assert(s->map.entry[i][0] == source->map.entry[i][0]);
-                    assert(memcmp(s->map.entry[i] + 1, source->map.entry[i] + 1, s->map.entry[i][0]) == 0);
-                }
-                for (int i = 0; i < s->pos.n; i++) {
-                    assert(memcmp(&s->pos.node[i], &source->pos.node[i], sizeof(s->pos.node[i])) == 0);
-                }
-                for (int i = 0; i < s->len.n; i++) {
-                    assert(memcmp(&s->len.node[i], &source->len.node[i], sizeof(s->len.node[i])) == 0);
-                }
-                for (int i = 0; i < s->pos.n; i++) {
-                    assert(memcmp(&s->dic.node[i], &source->dic.node[i], sizeof(s->dic.node[i])) == 0);
                 }
             }
             free(data);
@@ -245,7 +222,6 @@ static errno_t locate_test_folder(void) {
 int main(int argc, const char* argv[]) {
     (void)argc; (void)argv; // unused
     errno_t r = locate_test_folder();
-#if 0
     if (r == 0) {
         const char* data = "Hello World Hello.World Hello World";
         size_t bytes = strlen((const char*)data);
@@ -267,8 +243,6 @@ int main(int argc, const char* argv[]) {
     if (r == 0 && file.exist(argv[0])) {
         r = test_compression(argv[0]);
     }
-#endif
-#if 1
     static const char* test_files[] = {
         "test/bible.txt",     // bits len:3.01 pos:10.73 #words:91320 #lens:112
         "test/hhgttg.txt",    // bits len:2.33 pos:10.78 #words:12034 #lens:40
@@ -285,7 +259,6 @@ int main(int argc, const char* argv[]) {
             r = test_compression(test_files[i]);
         }
     }
-#endif
     return r;
 }
 
@@ -307,6 +280,7 @@ int main(int argc, const char* argv[]) {
 #if 0
 
 WITHOUT HUFFMAN:
+
      35 ->      32  91.4%
    4096 ->      16   0.4%
    4096 ->      24   0.6%
@@ -321,7 +295,22 @@ WITHOUT HUFFMAN:
  926536 ->  562440  60.7% of "x64.elf"
  786570 ->  830336 105.6% of "mandrill.bmp"
  627896 ->  667472 106.3% of "mandrill.png"
-WITH HUFFMAN:
 
+WITH HUFFMAN + DICTIONARY:
+
+     35 ->      40 114.3%
+   4096 ->      24   0.6%
+   4096 ->      24   0.6%
+  10716 ->    3616  33.7% of "test.c"
+ 231424 ->  116680  50.4% of "sqz.exe"
+4436173 -> 1801336  40.6% of "bible.txt"
+ 279056 ->  140952  50.5% of "hhgttg.txt"
+  68762 ->   32424  47.2% of "confucius.txt"
+  20943 ->   10664  50.9% of "laozi.txt"
+8182289 -> 2707072  33.1% of "sqlite3.c"
+ 847400 ->  456024  53.8% of "arm64.elf"
+ 926536 ->  514016  55.5% of "x64.elf"
+ 786570 ->  910648 115.8% of "mandrill.bmp"
+ 627896 ->  747184 119.0% of "mandrill.png"
 
 #endif

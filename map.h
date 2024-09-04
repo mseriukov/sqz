@@ -20,7 +20,7 @@ typedef struct {
 typedef struct {
     void        (*init)(map_type* m, map_entry_t entry[], size_t n);
     const void* (*data)(const map_type* m, int32_t i);
-    int8_t      (*bytes)(const map_type* m, int32_t i);
+    uint8_t     (*bytes)(const map_type* m, int32_t i);
     int32_t     (*get)(const map_type* m, const void* data, uint8_t bytes);
     int32_t     (*put)(map_type* m, const void* data, uint8_t bytes);
     int32_t     (*best)(const map_type* m, const void* data, size_t bytes);
@@ -87,7 +87,7 @@ static inline const void* map_data(const map_type* m, int32_t i) {
     return m->entry[i][0] > 0 ? &m->entry[i][1] : null;
 }
 
-static inline int8_t map_bytes(const map_type* m, int32_t i) {
+static inline uint8_t map_bytes(const map_type* m, int32_t i) {
     assert(0 <= i && i < m->n);
     return m->entry[i][0];
 }
