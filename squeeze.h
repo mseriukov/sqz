@@ -32,38 +32,6 @@ typedef struct {
     bitstream_type*    bs;
 } squeeze_type;
 
-#if 0
-
-#define squeeze_size_mul(name, count) (                                         \
-    ((uint64_t)(count) >= ((SIZE_MAX / 4) / (uint64_t)sizeof(name))) ?          \
-    0 : (size_t)((uint64_t)sizeof(name) * (uint64_t)(count))                    \
-)
-
-#define squeeze_size_implementation(win_bits, map_bits, len_bits) (             \
-    (sizeof(squeeze_type)) +                                                    \
-    squeeze_size_mul(map_entry_t, (1ULL << (map_bits))) +                       \
-    /* dic_nodes: */                                                            \
-    squeeze_size_mul(huffman_node_type, ((1ULL << (map_bits)) * 2ULL - 1ULL)) + \
-    /* sym_nodes: */                                                            \
-    squeeze_size_mul(huffman_node_type, (256ULL * 2ULL - 1ULL)) +               \
-    /* pos_nodes: */                                                            \
-    squeeze_size_mul(huffman_node_type, ((1ULL << (win_bits)) * 2ULL - 1ULL)) + \
-    /* len_nodes: */                                                            \
-    squeeze_size_mul(huffman_node_type, ((1ULL << (len_bits) * 2ULL - 1ULL))    \
-)
-
-#define squeeze_sizeof(win_bits, map_bits, len_bits) (                          \
-    (sizeof(size_t) == sizeof(uint64_t)) &&                                     \
-    (squeeze_min_win_bits <= (win_bits)) &&                                     \
-                             ((win_bits) <= squeeze_max_win_bits) &&            \
-    (squeeze_min_map_bits <= (map_bits)) &&                                     \
-                            ((map_bits) <= squeeze_max_map_bits) &&             \
-    (squeeze_min_len_bits <= (len_bits)) &&                                     \
-                            ((len_bits) <= squeeze_max_len_bits))) ?            \
-    (size_t)squeeze_size_implementation((win_bits), (map_bits), (len_bits)) : 0 \
-)
-#endif
-
 #define squeeze_size_mul(name, count) (                                         \
     ((uint64_t)(count) >= ((SIZE_MAX / 4) / (uint64_t)sizeof(name))) ?          \
     0 : (size_t)((uint64_t)sizeof(name) * (uint64_t)(count))                    \
@@ -105,6 +73,27 @@ typedef struct {
 } squeeze_interface;
 
 extern squeeze_interface squeeze;
+
+#if 0 
+
+// TODO: consider inclusion of these two functions for convinience:
+
+static squeeze_type* squeeze_new(bitstream_type* bs, uint8_t win_bits,
+                                 uint8_t map_bits, uint8_t len_bits) {
+    const uint64_t bytes = squeeze_sizeof(win_bits, map_bits, len_bits);
+    squeeze_type* s = (squeeze_type*)calloc(1, (size_t)bytes);
+    if (s != null) {
+        squeeze_init_with(s, s, bytes, win_bits, map_bits, len_bits);
+        s->bs = bs;
+    }
+    return s;
+}
+
+static void squeeze_delete(squeeze_type* s) {
+    free(s);
+}
+
+#endif
 
 #endif // squeeze_header_included
 
